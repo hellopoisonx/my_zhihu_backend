@@ -47,6 +47,6 @@ func TestUserService_CreateUser(t *testing.T) {
 		return mockUserDAO
 	}
 	us := service.NewUserService(nil, f, mockUserUtils)
-	_ := us.CreateUser(context.TODO(), &req)
-
+	_ = us.CreateUser(context.TODO(), &req)
+	// TODO
 }
