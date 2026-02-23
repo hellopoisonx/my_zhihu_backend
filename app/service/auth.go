@@ -60,8 +60,7 @@ func (s *AuthService) ValidateAccessToken(token string) (model.UserId, app_error
 	return model.UserId(claims.Id), nil
 }
 
-func (s *AuthService) Login(ctx context.Context, req *request.AuthLoginRequest) (accessToken, refreshToken string, accessExpireAt, refreshExpireAt time.Time, err app_error.AppError) {
-	var user *model.User
+func (s *AuthService) Login(ctx context.Context, req *request.AuthLoginRequest) (accessToken, refreshToken string, accessExpireAt, refreshExpireAt time.Time, user *model.User, err app_error.AppError) {
 	user, err = s.uDAO.GetByEmail(ctx, req.Email)
 	if err != nil {
 		return

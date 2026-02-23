@@ -24,7 +24,7 @@ func NewAuthController(service *service.AuthService, cfg config.ReadConfigFunc) 
 
 func (ctrl *AuthController) Login(c *gin.Context) {
 	doWithBody(c, ctrl.cfg().Service.Timeout, func(ctx context.Context, req *request.AuthLoginRequest) (*response.Response, app_error.AppError) {
-		at, rt, aExp, rExp, err := ctrl.service.Login(ctx, req)
+		at, rt, aExp, rExp, user, err := ctrl.service.Login(ctx, req)
 		if err != nil {
 			return nil, err
 		}
@@ -41,6 +41,17 @@ func (ctrl *AuthController) Login(c *gin.Context) {
 				RefreshToken: response.TokenResponse{
 					Token:    rt,
 					ExpireAt: rExp,
+				},
+				User: response.UserResponse{
+					Id:       user.Id,
+					Username: user.Username,
+					Email:    user.Email,
+					Gender:   *user.Gender,
+					Region:   user.Region,
+					Other: response.UserOtherInfoResponse{
+						Introduction: user.Other.Introduction,
+						Icon:         user.Other.Icon,
+					},
 				},
 			},
 		}, nil

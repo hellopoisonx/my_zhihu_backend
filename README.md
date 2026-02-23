@@ -52,6 +52,7 @@ $ docker-compose logs -f app # 运行日志
 
 ## 用户权限设计
 采用双token方案(refreshToken + accessToken) accessToken采用短时效jwt以实现无状态凭证存储减轻服务器压力 同时采用长时效有状态refreshToken+redis以实现用户状态的无感刷新、单点登录和服务器主动控制用户上下线
+当accessToken过期时发送的请求会返回错误码10009($.code=10009) 此时用户代理应当携带refreshToken发送 PATCH 请求到 /auth 接口从而获取新的 accessToken
 
 ## 用户存储相关
 - 采用雪花算法来生成用户全局唯一id 保证后续拆表等操作的便利性
@@ -67,6 +68,7 @@ $ docker-compose logs -f app # 运行日志
 - [ ] 管理员控制
 - [ ] 缓存
 - [ ] 移除部分硬编码数据
+- [ ] 解决跨域资源访问
 
 ## 接口响应结构
 统一返回 200 http 状态码 采用业务码判断请求结果状态
@@ -615,7 +617,6 @@ POST /auth
 
 ```json
 {
-  "id": 0,
   "email": "string",
   "password": "string"
 }
@@ -626,7 +627,6 @@ POST /auth
 |名称|位置|类型|必选|说明|
 |---|---|---|---|---|
 |body|body|object| 是 |none|
-|» id|body|number| 否 |none|
 |» email|body|string| 是 |none|
 |» password|body|string| 是 |none|
 
@@ -648,6 +648,17 @@ POST /auth
     "refresh_token": {
       "token": "string",
       "expire_at": "string"
+    },
+    "user": {
+      "id": 0,
+      "username": "string",
+      "email": "string",
+      "gender": 0,
+      "region": "string",
+      "other": {
+        "introduction": "string",
+        "icon": "string"
+      }
     }
   }
 }
@@ -676,6 +687,23 @@ POST /auth
 |»» refresh_token|[Token](#schematoken)|true|none||none|
 |»»» token|string|true|none||none|
 |»»» expire_at|string|true|none||none|
+|»» user|object|true|none||none|
+|»»» id|number|true|none||none|
+|»»» username|string|true|none||none|
+|»»» email|string|true|none||none|
+|»»» gender|integer(int32)|true|none||none|
+|»»» region|string|true|none||none|
+|»»» other|object|true|none||none|
+|»»»» introduction|string|true|none||none|
+|»»»» icon|string|true|none||none|
+
+#### 枚举值
+
+|属性|值|
+|---|---|
+|gender|0|
+|gender|1|
+|gender|2|
 
 ## PATCH 续期
 
@@ -1159,6 +1187,17 @@ xor
   "refresh_token": {
     "token": "string",
     "expire_at": "string"
+  },
+  "user": {
+    "id": 0,
+    "username": "string",
+    "email": "string",
+    "gender": 0,
+    "region": "string",
+    "other": {
+      "introduction": "string",
+      "icon": "string"
+    }
   }
 }
 
@@ -1170,6 +1209,23 @@ xor
 |---|---|---|---|---|---|
 |access_token|[Token](#schematoken)|true|none||none|
 |refresh_token|[Token](#schematoken)|true|none||none|
+|user|object|true|none||none|
+|» id|number|true|none||none|
+|» username|string|true|none||none|
+|» email|string|true|none||none|
+|» gender|integer(int32)|true|none||none|
+|» region|string|true|none||none|
+|» other|object|true|none||none|
+|»» introduction|string|true|none||none|
+|»» icon|string|true|none||none|
+
+#### 枚举值
+
+|属性|值|
+|---|---|
+|gender|0|
+|gender|1|
+|gender|2|
 
 <h2 id="tocS_Token">Token</h2>
 

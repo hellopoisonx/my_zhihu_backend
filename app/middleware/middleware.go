@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"errors"
 	"my_zhihu_backend/app/app_error"
 	"my_zhihu_backend/app/log"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
@@ -83,21 +85,28 @@ func HandleError() gin.HandlerFunc {
 
 func RateLimit() gin.HandlerFunc {
 	limiters := new(sync.Map)
+
 	return func(c *gin.Context) {
-		addr := c.Request.RemoteAddr
-
-		log.L().Info("request", zap.String("addr", addr))
-
-		if _, exists := limiters.Load(addr); !exists {
-			limiters.Store(addr, rate.NewLimiter(5, 1))
-		}
-		a, _ := limiters.Load(addr)
-		limiter := a.(*rate.Limiter)
-		if limiter.Allow() {
+		if c.Request.Method == "OPTIONS" {
 			c.Next()
 			return
 		}
-		_ = c.Error(app_error.ErrTooManyRequests)
-		c.Abort()
+
+		clientIP := c.ClientIP()
+
+		log.L().Info("request", zap.String("ip", clientIP))
+
+		limiterInterface, _ := limiters.LoadOrStore(clientIP, rate.NewLimiter(5, 1))
+		limiter := limiterInterface.(*rate.Limiter)
+
+		timeout, cancel := context.WithTimeout(c.Request.Context(), 1*time.Second)
+		defer cancel()
+
+		if err := limiter.Wait(timeout); err != nil {
+			_ = c.Error(app_error.ErrTooManyRequests.WithError(err))
+			c.Abort()
+		} else {
+			c.Next()
+		}
 	}
 }

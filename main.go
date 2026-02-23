@@ -10,7 +10,9 @@ import (
 	"my_zhihu_backend/app/router"
 	"my_zhihu_backend/app/service"
 	util2 "my_zhihu_backend/app/util"
+	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -31,7 +33,20 @@ func main() {
 	articleController := controller.NewArticleController(articleService, config.C)
 
 	r := gin.Default()
-	r.Use(middleware.HandleError(), middleware.RateLimit())
+	r.Use(
+		cors.New(cors.Config{
+			AllowAllOrigins:        true,
+			AllowMethods:           []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowHeaders:           []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
+			ExposeHeaders:          []string{"Content-Length"},
+			AllowCredentials:       true,
+			AllowBrowserExtensions: true,
+			AllowWebSockets:        true,
+			AllowFiles:             true,
+			MaxAge:                 12 * time.Hour,
+		}),
+		middleware.HandleError(), middleware.RateLimit(),
+	)
 	router.InitAuthRouter(r, authController, authService)
 	router.InitUsersRouter(r, userController, authService)
 	router.InitArticleRouter(r, articleController, authService)

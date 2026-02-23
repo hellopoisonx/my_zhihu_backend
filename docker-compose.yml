@@ -7,6 +7,7 @@ services:
       - "8080:8080"
     environment:
       # 应用环境变量
+      - GIN_MODE=release
       - APP_LISTEN_ADDR=:8080
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
