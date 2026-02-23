@@ -60,7 +60,7 @@ $ docker-compose logs -f app # 运行日志
 - 用户的简介、头像和个人设置采用mysql json结构存储 保证后续拓展性 同时减少联表查询操作
 
 ## 限流
-使用 [time/rate](golang.org/x/time/rate) 包提供的令牌桶实现了基于主机地址的限流
+使用 [time/rate](https://pkg.go.dev/golang.org/x/time/rate) 包提供的令牌桶实现了基于主机地址的限流
 
 ## TODO
 - [ ] 回答、评论 相关功能
