@@ -21,16 +21,20 @@ func main() {
 	repository.AutoMigrate(db)
 	userDAO := dao.NewUserDAO(config.C, db)
 	authDAO := dao.NewAuthDAO(redisClient, config.C)
+	articleDAO := dao.NewArticleDAO(db)
 	util := new(util2.Util)
 	userService := service.NewUserService(userDAO, config.C, util)
 	authService := service.NewAuthService(authDAO, userDAO, config.C, util)
+	articleService := service.NewArticleService(articleDAO, util)
 	userController := controller.NewUserController(userService, config.C)
 	authController := controller.NewAuthController(authService, config.C)
+	articleController := controller.NewArticleController(articleService, config.C)
 
 	r := gin.Default()
-	r.Use(middleware.HandleError())
+	r.Use(middleware.HandleError(), middleware.RateLimit())
 	router.InitAuthRouter(r, authController, authService)
 	router.InitUsersRouter(r, userController, authService)
+	router.InitArticleRouter(r, articleController, authService)
 	err := r.Run(config.C().App.ListenAddr)
 	if err != nil {
 		return

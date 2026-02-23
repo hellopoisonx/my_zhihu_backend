@@ -23,7 +23,7 @@ func NewAuthController(service *service.AuthService, cfg config.ReadConfigFunc) 
 }
 
 func (ctrl *AuthController) Login(c *gin.Context) {
-	do(c, ctrl.cfg().Service.Timeout, func(ctx context.Context, req *request.AuthLoginRequest) (*response.Response, app_error.AppError) {
+	doWithBody(c, ctrl.cfg().Service.Timeout, func(ctx context.Context, req *request.AuthLoginRequest) (*response.Response, app_error.AppError) {
 		at, rt, aExp, rExp, err := ctrl.service.Login(ctx, req)
 		if err != nil {
 			return nil, err
@@ -64,7 +64,7 @@ func (ctrl *AuthController) Logout(c *gin.Context) {
 }
 
 func (ctrl *AuthController) Renew(c *gin.Context) {
-	do(c, ctrl.cfg().Service.Timeout, func(ctx context.Context, req *request.AuthRenewAccessTokenRequest) (*response.Response, app_error.AppError) {
+	doWithBody(c, ctrl.cfg().Service.Timeout, func(ctx context.Context, req *request.AuthRenewAccessTokenRequest) (*response.Response, app_error.AppError) {
 		token, exp, err := ctrl.service.RenewAccessToken(ctx, req)
 		if err != nil {
 			return nil, err

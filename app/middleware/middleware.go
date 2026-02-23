@@ -8,6 +8,10 @@ import (
 	"my_zhihu_backend/app/service"
 	"net/http"
 	"strings"
+	"sync"
+
+	"go.uber.org/zap"
+	"golang.org/x/time/rate"
 
 	"github.com/gin-gonic/gin"
 )
@@ -74,5 +78,26 @@ func HandleError() gin.HandlerFunc {
 				Body:          nil,
 			})
 		}
+	}
+}
+
+func RateLimit() gin.HandlerFunc {
+	limiters := new(sync.Map)
+	return func(c *gin.Context) {
+		addr := c.Request.RemoteAddr
+
+		log.L().Info("request", zap.String("addr", addr))
+
+		if _, exists := limiters.Load(addr); !exists {
+			limiters.Store(addr, rate.NewLimiter(5, 1))
+		}
+		a, _ := limiters.Load(addr)
+		limiter := a.(*rate.Limiter)
+		if limiter.Allow() {
+			c.Next()
+			return
+		}
+		_ = c.Error(app_error.ErrTooManyRequests)
+		c.Abort()
 	}
 }

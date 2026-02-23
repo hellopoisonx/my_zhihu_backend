@@ -9,7 +9,6 @@ import (
 	"my_zhihu_backend/app/response"
 	"my_zhihu_backend/app/service"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,7 +23,7 @@ func NewUserController(service *service.UserService, cfg config.ReadConfigFunc) 
 }
 
 func (ctrl *UserController) CreateNewUser(c *gin.Context) {
-	do(c, ctrl.cfg().Service.Timeout, func(ctx context.Context, req *request.CreateNewUserRequest) (*response.Response, app_error.AppError) {
+	doWithBody(c, ctrl.cfg().Service.Timeout, func(ctx context.Context, req *request.CreateNewUserRequest) (*response.Response, app_error.AppError) {
 		if user, err := ctrl.service.CreateNewUser(ctx, req); err != nil {
 			return nil, err
 		} else {
@@ -70,8 +69,8 @@ func (ctrl *UserController) DeleteUser(c *gin.Context) {
 
 // GetUser 获取用户信息
 func (ctrl *UserController) GetUser(c *gin.Context) {
-	doQuery(c, ctrl.cfg().Service.Timeout, func(ctx context.Context, req *struct{}) (*response.Response, app_error.AppError) {
-		id, err := getUserIDFromParam(c)
+	doWithQuery(c, ctrl.cfg().Service.Timeout, func(ctx context.Context, req *struct{}) (*response.Response, app_error.AppError) {
+		id, err := getIdFromParams(c)
 		if err != nil {
 			return nil, app_error.NewInputError("invalid user id", app_error.ErrCodeInvalidParameters, err)
 		}
@@ -111,7 +110,7 @@ func (ctrl *UserController) GetUser(c *gin.Context) {
 
 // UpdateUser 更新用户信息
 func (ctrl *UserController) UpdateUser(c *gin.Context) {
-	do(c, ctrl.cfg().Service.Timeout, func(ctx context.Context, req *request.UpdateUserRequest) (*response.Response, app_error.AppError) {
+	doWithBody(c, ctrl.cfg().Service.Timeout, func(ctx context.Context, req *request.UpdateUserRequest) (*response.Response, app_error.AppError) {
 		currentUserID := getCurrentUserID(c)
 
 		if user, err := ctrl.service.UpdateUser(ctx, currentUserID, req); err != nil {
@@ -140,7 +139,7 @@ func (ctrl *UserController) UpdateUser(c *gin.Context) {
 
 // SearchUserByUsername 根据用户名搜索用户
 func (ctrl *UserController) SearchUserByUsername(c *gin.Context) {
-	doQuery(c, ctrl.cfg().Service.Timeout, func(ctx context.Context, req *request.SearchUserRequest) (*response.Response, app_error.AppError) {
+	doWithQuery(c, ctrl.cfg().Service.Timeout, func(ctx context.Context, req *request.SearchUserRequest) (*response.Response, app_error.AppError) {
 		userIDs, err := ctrl.service.SearchUserByUsername(ctx, req.Username)
 		if err != nil {
 			return nil, err
@@ -161,7 +160,7 @@ func (ctrl *UserController) AddFollowing(c *gin.Context) {
 	timeout, cancel := context.WithTimeout(c.Request.Context(), ctrl.cfg().Service.Timeout)
 	defer cancel()
 	currentUserID := getCurrentUserID(c)
-	followingID, err := getUserIDFromParam(c)
+	followingID, err := getIdFromParams(c)
 	if err != nil {
 		_ = c.Error(app_error.NewInputError("invalid user id", app_error.ErrCodeInvalidParameters, err))
 		return
@@ -185,7 +184,7 @@ func (ctrl *UserController) RemoveFollowing(c *gin.Context) {
 	timeout, cancel := context.WithTimeout(c.Request.Context(), ctrl.cfg().Service.Timeout)
 	defer cancel()
 	currentUserID := getCurrentUserID(c)
-	followingID, err := getUserIDFromParam(c)
+	followingID, err := getIdFromParams(c)
 	if err != nil {
 		_ = c.Error(app_error.NewInputError("invalid user id", app_error.ErrCodeInvalidParameters, err))
 		return
@@ -208,7 +207,7 @@ func (ctrl *UserController) RemoveFollowing(c *gin.Context) {
 func (ctrl *UserController) GetFollowers(c *gin.Context) {
 	timeout, cancel := context.WithTimeout(c.Request.Context(), ctrl.cfg().Service.Timeout)
 	defer cancel()
-	id, err := getUserIDFromParam(c)
+	id, err := getIdFromParams(c)
 	if err != nil {
 		_ = c.Error(app_error.NewInputError("invalid parameters", app_error.ErrCodeInvalidParameters, err))
 		return
@@ -244,7 +243,7 @@ func (ctrl *UserController) GetFollowers(c *gin.Context) {
 func (ctrl *UserController) GetFollowings(c *gin.Context) {
 	timeout, cancel := context.WithTimeout(c.Request.Context(), ctrl.cfg().Service.Timeout)
 	defer cancel()
-	id, err := getUserIDFromParam(c)
+	id, err := getIdFromParams(c)
 	if err != nil {
 		_ = c.Error(app_error.NewInputError("invalid parameters", app_error.ErrCodeInvalidParameters, err))
 		return
@@ -274,21 +273,4 @@ func (ctrl *UserController) GetFollowings(c *gin.Context) {
 		Message:       "user followings",
 		Body:          followings,
 	})
-}
-
-// 辅助函数：从路径参数中获取用户ID
-func getUserIDFromParam(c *gin.Context) (int64, error) {
-	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		return 0, err
-	}
-	return int64(id), nil
-}
-
-// 辅助函数：从上下文获取当前用户ID
-func getCurrentUserID(c *gin.Context) int64 {
-	userID := c.MustGet("id").(model.UserId)
-
-	return int64(userID)
 }

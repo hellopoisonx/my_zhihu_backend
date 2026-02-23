@@ -38,6 +38,9 @@ $ docker-compose up -d # 运行
 $ docker-compose logs -f app # 运行日志
 ```
 
+## 语言相关
+基于go 1.26.0版本 使用泛型简化代码 使用option模式编写更新接口
+
 ## 日志系统
 采用zap作为日志系统来实现结构化日志 借助golang的构建约束来区分生产和开发环境
 
@@ -49,6 +52,21 @@ $ docker-compose logs -f app # 运行日志
 
 ## 用户权限设计
 采用双token方案(refreshToken + accessToken) accessToken采用短时效jwt以实现无状态凭证存储减轻服务器压力 同时采用长时效有状态refreshToken+redis以实现用户状态的无感刷新、单点登录和服务器主动控制用户上下线
+
+## 用户存储相关
+- 采用雪花算法来生成用户全局唯一id 保证后续拆表等操作的便利性
+- 用户密码先使用sha512统一长度后采用bcrypt算法来加盐加密存储 
+- 客户端登录凭证为邮箱加明文密码 后续认证凭证为accessToken
+- 用户的简介、头像和个人设置采用mysql json结构存储 保证后续拓展性 同时减少联表查询操作
+
+## 限流
+使用 [time/rate](golang.org/x/time/rate) 包提供的令牌桶实现了基于主机地址的限流
+
+## TODO
+- [ ] 回答、评论 相关功能
+- [ ] 管理员控制
+- [ ] 缓存
+- [ ] 移除部分硬编码数据
 
 ## 接口响应结构
 统一返回 200 http 状态码 采用业务码判断请求结果状态
@@ -75,6 +93,7 @@ $ docker-compose logs -f app # 运行日志
 | 10011 | `ErrCodeQuestionNotFound`           | 问题未找到  | `ErrQuestionNotFound`     |
 | 10012 | `ErrCodeAnswerNotFound`             | 回答未找到  | `ErrAnswerNotFound`       |
 | 10013 | `ErrCodeCommentNotFound`            | 评论未找到  | `ErrCommentNotFound`      |
+| 10014 | `ErrCodeTooManyRequest`             | 请求频繁    | `ErrTooManyRequest`       |
 ### 系统相关错误码 (20001-20004)
 
 | 错误码   | 常量名                 | 描述          |
@@ -83,18 +102,6 @@ $ docker-compose logs -f app # 运行日志
 | 20002 | `ErrCodeRedis`      | Redis 错误    |
 | 20003 | `ErrCodeUserToken`  | 用户令牌错误      |
 | 20004 | `ErrCodeEncryption` | 加密错误        |
-
-## 用户存储相关
-- 采用雪花算法来生成用户全局唯一id 保证后续拆表等操作的便利性
-- 用户密码先使用sha512统一长度后采用bcrypt算法来加盐加密存储 
-- 客户端登录凭证为邮箱加明文密码 后续认证凭证为accessToken
-- 用户的简介、头像和个人设置采用mysql json结构存储 保证后续拓展性 同时减少联表查询操作
-
-## TODO
-- [ ] 文章(问题、回答、评论)相关功能
-- [ ] 管理员控制
-- [ ] 缓存
-- [ ] 移除部分硬编码数据
 
 Base URLs:
 
@@ -752,6 +759,217 @@ DELETE /auth
 |---|---|---|---|
 |200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|[Response](#schemaresponse)|
 
+# article
+
+## POST 创建问题
+
+POST /questions
+
+> Body 请求参数
+
+```json
+{
+  "title": "string",
+  "content": "string"
+}
+```
+
+### 请求参数
+
+|名称|位置|类型|必选|说明|
+|---|---|---|---|---|
+|body|body|object| 是 |none|
+|» title|body|string| 是 |none|
+|» content|body|string| 是 |none|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 0,
+  "ok": true,
+  "internal_error": true,
+  "message": "string",
+  "body": {
+    "id": 0,
+    "title": "string",
+    "content": "string",
+    "author_id": 0,
+    "is_available": true,
+    "updated_at": "string"
+  }
+}
+```
+
+### 返回结果
+
+|状态码|状态码含义|说明|数据模型|
+|---|---|---|---|
+|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|约束|中文名|说明|
+|---|---|---|---|---|---|
+|» code|integer|true|none||none|
+|» ok|boolean|true|none||none|
+|» internal_error|boolean|true|none||none|
+|» message|string|true|none||none|
+|» body|[Question](#schemaquestion)|false|none||none|
+|»» id|number|true|none||none|
+|»» title|string|true|none||none|
+|»» content|string|true|none||none|
+|»» author_id|number|true|none||none|
+|»» is_available|boolean|true|none||none|
+|»» updated_at|string|true|none||none|
+
+## GET 搜索
+
+GET /questions
+
+### 请求参数
+
+|名称|位置|类型|必选|说明|
+|---|---|---|---|---|
+|page|query|integer| 否 |none|
+|size|query|integer| 否 |none|
+|keywords|query|string| 是 |none|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 0,
+  "ok": true,
+  "internal_error": true,
+  "message": "string",
+  "body": [
+    0
+  ]
+}
+```
+
+### 返回结果
+
+|状态码|状态码含义|说明|数据模型|
+|---|---|---|---|
+|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|约束|中文名|说明|
+|---|---|---|---|---|---|
+|» code|integer|true|none||none|
+|» ok|boolean|true|none||none|
+|» internal_error|boolean|true|none||none|
+|» message|string|true|none||none|
+|» body|[number]|true|none||none|
+
+## PATCH 更新问题
+
+PATCH /questions/{id}
+
+> Body 请求参数
+
+```json
+{
+  "title": "string",
+  "content": "string"
+}
+```
+
+### 请求参数
+
+|名称|位置|类型|必选|说明|
+|---|---|---|---|---|
+|id|path|string| 是 |none|
+|body|body|object| 是 |none|
+|» title|body|string| 否 |none|
+|» content|body|string| 否 |none|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 0,
+  "ok": true,
+  "internal_error": true,
+  "message": "string",
+  "body": {
+    "id": 0,
+    "title": "string",
+    "content": "string",
+    "author_id": 0,
+    "is_available": true,
+    "updated_at": "string"
+  }
+}
+```
+
+### 返回结果
+
+|状态码|状态码含义|说明|数据模型|
+|---|---|---|---|
+|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|约束|中文名|说明|
+|---|---|---|---|---|---|
+|» code|integer|true|none||none|
+|» ok|boolean|true|none||none|
+|» internal_error|boolean|true|none||none|
+|» message|string|true|none||none|
+|» body|[Question](#schemaquestion)|false|none||none|
+|»» id|number|true|none||none|
+|»» title|string|true|none||none|
+|»» content|string|true|none||none|
+|»» author_id|number|true|none||none|
+|»» is_available|boolean|true|none||none|
+|»» updated_at|string|true|none||none|
+
+## DELETE 删除问题
+
+DELETE /questions/{id}
+
+### 请求参数
+
+|名称|位置|类型|必选|说明|
+|---|---|---|---|---|
+|id|path|string| 是 |none|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 0,
+  "ok": true,
+  "internal_error": true,
+  "message": "string",
+  "body": "string"
+}
+```
+
+### 返回结果
+
+|状态码|状态码含义|说明|数据模型|
+|---|---|---|---|
+|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|[Response](#schemaresponse)|
+
 # 数据模型
 
 <h2 id="tocS_User">User</h2>
@@ -974,4 +1192,34 @@ xor
 |---|---|---|---|---|---|
 |token|string|true|none||none|
 |expire_at|string|true|none||none|
+
+<h2 id="tocS_Question">Question</h2>
+
+<a id="schemaquestion"></a>
+<a id="schema_Question"></a>
+<a id="tocSquestion"></a>
+<a id="tocsquestion"></a>
+
+```json
+{
+  "id": 0,
+  "title": "string",
+  "content": "string",
+  "author_id": 0,
+  "is_available": true,
+  "updated_at": "string"
+}
+
+```
+
+### 属性
+
+|名称|类型|必选|约束|中文名|说明|
+|---|---|---|---|---|---|
+|id|number|true|none||none|
+|title|string|true|none||none|
+|content|string|true|none||none|
+|author_id|number|true|none||none|
+|is_available|boolean|true|none||none|
+|updated_at|string|true|none||none|
 

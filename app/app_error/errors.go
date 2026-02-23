@@ -21,6 +21,8 @@ const (
 	ErrCodeQuestionNotFound
 	ErrCodeAnswerNotFound
 	ErrCodeCommentNotFound
+
+	ErrCodeTooManyRequests
 )
 
 const (
@@ -42,4 +44,5 @@ var (
 	ErrQuestionNotFound     = NewInputError("question not found", ErrCodeQuestionNotFound, nil)
 	ErrAnswerNotFound       = NewInputError("answer not found", ErrCodeAnswerNotFound, nil)
 	ErrCommentNotFound      = NewInputError("comment not found", ErrCodeCommentNotFound, nil)
+	ErrTooManyRequests      = NewInputError("too many requests", ErrCodeTooManyRequests, nil)
 )
