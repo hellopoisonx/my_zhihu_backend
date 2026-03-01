@@ -50,6 +50,13 @@ $ docker-compose logs -f app # 运行日志
 ## api设计
 借助 apifox 来实现接口的设计、测试、数据mock
 
+## 缓存
+- 使用redis作为缓存系统 
+- 通过 singleflight 和布隆过滤器(redis BF)解决缓存击穿和穿透 
+- 针对热点数据的过期时间随机化处理，防止了缓存雪崩
+- 通过gin的中间件机制自动缓存GET请求
+- 结合go的泛型设计缓存系统 支持异步操作
+
 ## 用户权限设计
 采用双token方案(refreshToken + accessToken) accessToken采用短时效jwt以实现无状态凭证存储减轻服务器压力 同时采用长时效有状态refreshToken+redis以实现用户状态的无感刷新、单点登录和服务器主动控制用户上下线
 当accessToken过期时发送的请求会返回错误码10009($.code=10009) 此时用户代理应当携带refreshToken发送 PATCH 请求到 /auth 接口从而获取新的 accessToken
@@ -66,7 +73,6 @@ $ docker-compose logs -f app # 运行日志
 ## TODO
 - [ ] 回答、评论 相关功能
 - [ ] 管理员控制
-- [ ] 缓存
 - [ ] 移除部分硬编码数据
 - [ ] 解决跨域资源访问
 
@@ -98,12 +104,15 @@ $ docker-compose logs -f app # 运行日志
 | 10014 | `ErrCodeTooManyRequest`             | 请求频繁    | `ErrTooManyRequest`       |
 ### 系统相关错误码 (20001-20004)
 
-| 错误码   | 常量名                 | 描述          |
-|-------|---------------------|-------------|
-| 20001 | `ErrCodeMysql`      | MySQL 数据库错误 |
-| 20002 | `ErrCodeRedis`      | Redis 错误    |
-| 20003 | `ErrCodeUserToken`  | 用户令牌错误      |
-| 20004 | `ErrCodeEncryption` | 加密错误        |
+| 错误码   | 常量名                      | 描述          |
+|-------|--------------------------|-------------|
+| 20001 | `ErrCodeMysql`           | MySQL 数据库错误 |
+| 20002 | `ErrCodeRedis`           | Redis 错误    |
+| 20003 | `ErrCodeUserToken`       | 用户令牌错误      |
+| 20004 | `ErrCodeEncryption`      | 加密错误        |
+| 20005 | `ErrCodeRedisCache`      | 缓存错误        |
+| 20006 | `ErrCodeBloomFilter`     | 布隆过滤器错误     |
+| 20007 | `ErrCodeInvalidJsonBody` | 序列化出错       |
 
 Base URLs:
 

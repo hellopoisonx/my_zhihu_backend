@@ -18,8 +18,8 @@ type AuthController struct {
 	cfg     config.ReadConfigFunc
 }
 
-func NewAuthController(service *service.AuthService, cfg config.ReadConfigFunc) *AuthController {
-	return &AuthController{service: service, cfg: cfg}
+func NewAuthController(service *service.AuthService) *AuthController {
+	return &AuthController{service: service, cfg: config.C}
 }
 
 func (ctrl *AuthController) Login(c *gin.Context) {

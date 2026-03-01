@@ -8,6 +8,8 @@ import (
 	"my_zhihu_backend/app/request"
 	"my_zhihu_backend/app/response"
 	"my_zhihu_backend/app/util"
+
+	"gorm.io/gorm"
 )
 
 type ArticleService struct {
@@ -15,8 +17,10 @@ type ArticleService struct {
 	util *util.Util
 }
 
-func NewArticleService(dao *dao.ArticleDAO, util *util.Util) *ArticleService {
-	return &ArticleService{dao, util}
+func NewArticleService(db *gorm.DB) *ArticleService {
+	aDAO := dao.NewArticleDAO(db)
+	u := new(util.Util)
+	return &ArticleService{aDAO, u}
 }
 
 func (a *ArticleService) PostNewQuestion(ctx context.Context, userId model.UserId, req *request.PostNewQuestionRequest) (*model.Question, app_error.AppError) {

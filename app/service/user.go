@@ -2,22 +2,62 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"my_zhihu_backend/app/app_error"
+	"my_zhihu_backend/app/cache"
 	"my_zhihu_backend/app/config"
 	"my_zhihu_backend/app/dao"
+	"my_zhihu_backend/app/log"
 	"my_zhihu_backend/app/model"
 	"my_zhihu_backend/app/request"
 	"my_zhihu_backend/app/util"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
-type UserService struct {
-	dao  *dao.UserDAO
-	cfg  config.ReadConfigFunc
-	util *util.Util
+var l = log.L().With(zap.String("module", "user service"))
+
+func NewUserService(db *gorm.DB, client *redis.Client) *UserService {
+	cfg := config.C
+	userDAO := dao.NewUserDAO(cfg, db)
+	u := new(util.Util)
+	bloomFilter := cache.NewBloomFilter("user-filter", client)
+	infoCacher := cache.NewJsonCacher(client, 24*time.Hour, cfg().Prefix.UserInfoPrefix, func(ctx context.Context, args ...any) (*model.User, app_error.AppError) {
+		return userDAO.GetById(ctx, args[0].(model.UserId))
+	}, bloomFilter)
+	return &UserService{
+		dao:         userDAO,
+		infoCacher:  infoCacher,
+		bloomFilter: bloomFilter,
+		cfg:         cfg,
+		util:        u,
+	}
 }
 
-func NewUserService(dao *dao.UserDAO, cfg config.ReadConfigFunc, util *util.Util) *UserService {
-	return &UserService{dao: dao, cfg: cfg, util: util}
+type UserService struct {
+	dao         *dao.UserDAO
+	cfg         config.ReadConfigFunc
+	util        *util.Util
+	infoCacher  cache.Cacher[model.User]
+	bloomFilter *cache.BloomFilter
+}
+
+func (service *UserService) store(_ context.Context, user model.User) {
+	go func() {
+		timeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		key := fmt.Sprintf("%d", user.Id)
+		user.HPassword = ""
+		res := cache.NewAsyncCacher(service.infoCacher).PutChan(timeout, key, user)
+		if err := res.Err(timeout); err != nil {
+			l.Error("failed to cache user info", err.ErrorField()...)
+		} else {
+			l.Info("user info catch", zap.Any("user_id", user.Id))
+		}
+	}()
 }
 
 func (service *UserService) CreateNewUser(ctx context.Context, req *request.CreateNewUserRequest) (*model.User, app_error.AppError) {
@@ -38,7 +78,7 @@ func (service *UserService) CreateNewUser(ctx context.Context, req *request.Crea
 	if hPasswd, err := service.util.EncryptPassword(req.Password); err != nil {
 		return nil, app_error.NewInternalError(app_error.ErrCodeEncryption, err)
 	} else {
-		err := service.dao.CreateNewUser(ctx, &model.User{
+		user := model.User{
 			Id:             model.UserId(service.util.GenerateSnowflakeID()),
 			Username:       req.Username,
 			HPassword:      string(hPasswd),
@@ -49,7 +89,9 @@ func (service *UserService) CreateNewUser(ctx context.Context, req *request.Crea
 			Region:         req.Region,
 			Settings:       model.UserSettings{HidePrivacy: *req.Settings.HidePrivacy},
 			Other:          model.UserOtherInfo{Introduction: *req.Other.Introduction, Icon: *req.Other.Icon},
-		})
+		}
+		service.store(ctx, user)
+		err := service.dao.CreateNewUser(ctx, &user)
 		if err != nil {
 			return nil, err
 		}
@@ -64,7 +106,7 @@ func (service *UserService) DeleteUser(ctx context.Context, id int64) app_error.
 
 // GetUser 获取用户信息
 func (service *UserService) GetUser(ctx context.Context, id int64) (*model.User, app_error.AppError) {
-	return service.dao.GetById(ctx, model.UserId(id))
+	return service.infoCacher.Get(ctx, fmt.Sprintf("%d", id))
 }
 
 // UpdateUser 更新用户信息
@@ -112,11 +154,12 @@ func (service *UserService) UpdateUser(ctx context.Context, id int64, req *reque
 		return nil, nil // 没有要更新的字段
 	}
 
-	err := service.dao.UpdateFields(ctx, model.UserId(id), fields)
+	user, err := service.dao.UpdateFields(ctx, model.UserId(id), fields)
 	if err != nil {
 		return nil, err
 	}
-	return service.dao.GetById(ctx, model.UserId(id))
+	service.store(ctx, *user)
+	return user, err
 }
 
 // SearchUserByUsername 根据用户名搜索用户
@@ -130,7 +173,6 @@ func (service *UserService) SearchUserByUsername(ctx context.Context, username s
 	for _, user := range users {
 		ids = append(ids, int64(user.Id))
 	}
-
 	return ids, nil
 }
 

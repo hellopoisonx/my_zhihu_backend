@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
 const secret = "this is a secret key" // TODO: 更换密钥
@@ -27,8 +29,17 @@ type AuthService struct {
 	util *util.Util
 }
 
-func NewAuthService(aDAO *dao.AuthDAO, uDAO *dao.UserDAO, cfg config.ReadConfigFunc, util *util.Util) *AuthService {
-	return &AuthService{aDAO, uDAO, cfg, util}
+func NewAuthService(db *gorm.DB, client *redis.Client) *AuthService {
+	cfg := config.C
+	aDAO := dao.NewAuthDAO(client, cfg)
+	uDAO := dao.NewUserDAO(cfg, db)
+	u := new(util.Util)
+	return &AuthService{
+		aDAO: aDAO,
+		uDAO: uDAO,
+		cfg:  cfg,
+		util: u,
+	}
 }
 
 func (s *AuthService) newAccessToken(id model.UserId) (string, time.Time, app_error.AppError) {

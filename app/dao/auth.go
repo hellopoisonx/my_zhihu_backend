@@ -30,6 +30,9 @@ func (dao *AuthDAO) SaveRefreshToken(ctx context.Context, id model.UserId, refre
 
 func (dao *AuthDAO) GetRefreshToken(ctx context.Context, id model.UserId) (string, app_error.AppError) {
 	if token, err := dao.client.Get(ctx, dao.cfg().Prefix.RefreshToken+strconv.Itoa(int(id))).Result(); err != nil {
+		if errors.Is(err, redis.Nil) {
+			return "", app_error.ErrUserInvalidToken.WithError(err)
+		}
 		return "", app_error.NewInternalError(app_error.ErrCodeRedis, err)
 	} else {
 		return token, nil

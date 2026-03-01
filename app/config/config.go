@@ -46,6 +46,9 @@ type ServiceConfig struct {
 
 type RedisPrefixConfig struct {
 	RefreshToken string `mapstructure:"REFRESH_TOKEN" yaml:"refreshToken"`
+
+	UserInfoPrefix   string `mapstructure:"USERINFO_PREFIX" yaml:"userInfoPrefix"`
+	UserSearchPrefix string `mapstructure:"USER_SEARCH_PREFIX" yaml:"userSearchPrefix"`
 }
 
 var cfg Config
@@ -61,6 +64,8 @@ func InitConfig() {
 	viper.SetDefault("mysql.PASSWORD", "@@XXIIAA@@")
 	viper.SetDefault("redis.ADDR", "127.0.0.1:6379")
 	viper.SetDefault("prefix.REFRESH_TOKEN", "refreshToken::")
+	viper.SetDefault("prefix.USERINFO_PREFIX", "userInfo::")
+	viper.SetDefault("prefix.USER_SEARCH_PREFIX", "userSearch::")
 	viper.SetDefault("service.REFRESH_TOKEN_EXP", 7*24*time.Hour)
 	viper.SetDefault("service.ACCESS_TOKEN_EXP", 5*time.Minute)
 	viper.SetDefault("service.TIMEOUT", 5*time.Second)

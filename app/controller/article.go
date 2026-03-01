@@ -19,8 +19,8 @@ type ArticleController struct {
 	cfg     config.ReadConfigFunc
 }
 
-func NewArticleController(as *service.ArticleService, cfg config.ReadConfigFunc) *ArticleController {
-	return &ArticleController{as, cfg}
+func NewArticleController(as *service.ArticleService) *ArticleController {
+	return &ArticleController{as, config.C}
 }
 
 type ctrlFunc[T any] func(c *gin.Context, ctx context.Context, userId model.UserId, req *T) (*response.Response, app_error.AppError)

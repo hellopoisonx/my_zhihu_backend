@@ -3,13 +3,11 @@ package main
 import (
 	"my_zhihu_backend/app/config"
 	"my_zhihu_backend/app/controller"
-	"my_zhihu_backend/app/dao"
 	_ "my_zhihu_backend/app/log"
 	"my_zhihu_backend/app/middleware"
 	"my_zhihu_backend/app/repository"
 	"my_zhihu_backend/app/router"
 	"my_zhihu_backend/app/service"
-	util2 "my_zhihu_backend/app/util"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -21,20 +19,16 @@ func main() {
 	redisClient := repository.NewRedisClient(config.C)
 	db := repository.NewMysqlDBConn(config.C)
 	repository.AutoMigrate(db)
-	userDAO := dao.NewUserDAO(config.C, db)
-	authDAO := dao.NewAuthDAO(redisClient, config.C)
-	articleDAO := dao.NewArticleDAO(db)
-	util := new(util2.Util)
-	userService := service.NewUserService(userDAO, config.C, util)
-	authService := service.NewAuthService(authDAO, userDAO, config.C, util)
-	articleService := service.NewArticleService(articleDAO, util)
-	userController := controller.NewUserController(userService, config.C)
-	authController := controller.NewAuthController(authService, config.C)
-	articleController := controller.NewArticleController(articleService, config.C)
+	userService := service.NewUserService(db, redisClient)
+	authService := service.NewAuthService(db, redisClient)
+	articleService := service.NewArticleService(db)
+	userController := controller.NewUserController(userService)
+	authController := controller.NewAuthController(authService)
+	articleController := controller.NewArticleController(articleService)
 
 	r := gin.Default()
 	r.Use(
-		cors.New(cors.Config{
+		cors.New(cors.Config{ // TODO: 跨域
 			AllowAllOrigins:        true,
 			AllowMethods:           []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 			AllowHeaders:           []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
@@ -48,7 +42,7 @@ func main() {
 		middleware.HandleError(), middleware.RateLimit(),
 	)
 	router.InitAuthRouter(r, authController, authService)
-	router.InitUsersRouter(r, userController, authService)
+	router.InitUsersRouter(r, userController, authService, redisClient)
 	router.InitArticleRouter(r, articleController, authService)
 	err := r.Run(config.C().App.ListenAddr)
 	if err != nil {

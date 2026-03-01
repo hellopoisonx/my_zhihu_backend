@@ -30,6 +30,9 @@ const (
 	ErrCodeRedis
 	ErrCodeUserToken
 	ErrCodeEncryption
+	ErrCodeRedisCache
+	ErrCodeBloomFilter
+	ErrCodeInvalidJsonBody
 )
 
 var (
@@ -45,4 +48,13 @@ var (
 	ErrAnswerNotFound       = NewInputError("answer not found", ErrCodeAnswerNotFound, nil)
 	ErrCommentNotFound      = NewInputError("comment not found", ErrCodeCommentNotFound, nil)
 	ErrTooManyRequests      = NewInputError("too many requests", ErrCodeTooManyRequests, nil)
+)
+
+var (
+	ErrRedisCache             = NewInternalError(ErrCodeRedisCache, nil)
+	ErrRedisCacheKeyNotExists = NewInputError("key not exists", ErrCodeRedisCache, nil)
+
+	ErrBloomFilter = NewInternalError(ErrCodeBloomFilter, nil)
+
+	ErrInvalidJsonBody = NewInternalError(ErrCodeInvalidJsonBody, nil)
 )

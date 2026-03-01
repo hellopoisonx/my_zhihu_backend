@@ -1,9 +1,12 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"my_zhihu_backend/app/app_error"
+	"my_zhihu_backend/app/cache"
 	"my_zhihu_backend/app/log"
 	"my_zhihu_backend/app/response"
 	"my_zhihu_backend/app/service"
@@ -12,11 +15,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 
 	"github.com/gin-gonic/gin"
 )
+
+var l = log.L().With(zap.String("module", "middleware"))
 
 var ErrInvalidAuthorizationHeader = app_error.NewInputError("invalid authorization header", app_error.ErrCodeInvalidAuthorizationHeader, nil)
 
@@ -107,6 +113,48 @@ func RateLimit() gin.HandlerFunc {
 			c.Abort()
 		} else {
 			c.Next()
+		}
+	}
+}
+
+type queryResponseHijack struct {
+	gin.ResponseWriter
+	body *bytes.Buffer
+}
+
+func (q *queryResponseHijack) Write(b []byte) (int, error) {
+	q.body.Write(b)
+	return q.ResponseWriter.Write(b)
+}
+
+func CacheQuery(client *redis.Client, prefix, filterName string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		cacher := cache.NewJsonCacher(client, 15*time.Minute, prefix, func(ctx context.Context, args ...any) (*response.Response, app_error.AppError) {
+			return nil, app_error.ErrRedisCacheKeyNotExists
+		}, cache.NewBloomFilter(filterName, client))
+		timeout, cancel := context.WithTimeout(c.Request.Context(), 1*time.Second)
+		defer cancel()
+		resp, err := cacher.Get(timeout, c.Request.URL.RequestURI(), c)
+		if err == nil && resp != nil { // 缓存命中 直接返回
+			c.JSON(http.StatusOK, resp)
+			c.Abort()
+			return
+		}
+
+		hijack := &queryResponseHijack{c.Writer, bytes.NewBufferString("")} // 缓存未命中 开始劫持ResponseWriter
+		c.Writer = hijack
+		c.Next()
+		if c.Writer.Status() == http.StatusOK && c.Errors.Last() == nil { // controller 正常响应
+			go func(rawJson []byte, key string) {
+				var resp response.Response
+				if err := json.Unmarshal(rawJson, &resp); err != nil {
+					l.Error("failed to unmarshal json to response.Response", app_error.ErrInvalidJsonBody.WithError(err).ErrorField()...)
+					return
+				}
+				if err := cacher.Put(context.Background(), key, resp); err != nil {
+					l.Error("failed to cache response", err.ErrorField()...)
+				}
+			}(hijack.body.Bytes(), c.Request.URL.RequestURI())
 		}
 	}
 }

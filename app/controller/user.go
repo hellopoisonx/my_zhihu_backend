@@ -18,8 +18,8 @@ type UserController struct {
 	cfg     config.ReadConfigFunc
 }
 
-func NewUserController(service *service.UserService, cfg config.ReadConfigFunc) *UserController {
-	return &UserController{service: service, cfg: cfg}
+func NewUserController(service *service.UserService) *UserController {
+	return &UserController{service: service, cfg: config.C}
 }
 
 func (ctrl *UserController) CreateNewUser(c *gin.Context) {

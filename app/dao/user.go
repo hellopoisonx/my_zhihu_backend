@@ -84,11 +84,12 @@ func (dao *UserDAO) ListUserByUsername(ctx context.Context, username string) ([]
 var ErrMysqlInvalidFields = app_error.NewInputError("invalid fields", app_error.ErrCodeInvalidParameters, nil)
 
 // UpdateFields 更新用户信息
-func (dao *UserDAO) UpdateFields(ctx context.Context, id model.UserId, fields map[string]any) app_error.AppError {
+func (dao *UserDAO) UpdateFields(ctx context.Context, id model.UserId, fields map[string]any) (*model.User, app_error.AppError) {
+	tx := dao.db.Begin()
 	if other, exists := fields["other"]; exists {
 		otherMap, ok := other.(map[string]any)
 		if !ok {
-			return ErrMysqlInvalidFields
+			return nil, ErrMysqlInvalidFields
 		}
 		if len(otherMap) <= 0 {
 			delete(fields, "other") // 防止other为空值时更新把原本json数据清空
@@ -106,7 +107,7 @@ func (dao *UserDAO) UpdateFields(ctx context.Context, id model.UserId, fields ma
 	if settings, exists := fields["settings"]; exists {
 		otherMap, ok := settings.(map[string]any)
 		if !ok {
-			return ErrMysqlInvalidFields
+			return nil, ErrMysqlInvalidFields
 		}
 		if len(otherMap) <= 0 {
 			delete(fields, "settings") // 防止settings为空值时更新把原本json数据清空
@@ -126,14 +127,28 @@ func (dao *UserDAO) UpdateFields(ctx context.Context, id model.UserId, fields ma
 			fields["settings"] = gorm.Expr(expr, args...)
 		}
 	}
-	result := dao.db.WithContext(ctx).Model(model.User{}).Where("id = ?", id).Updates(fields)
+	result := tx.WithContext(ctx).Model(model.User{}).Where("id = ?", id).Updates(fields)
 	if result.Error != nil {
-		return app_error.NewInternalError(app_error.ErrCodeMysql, result.Error)
+		tx.Rollback()
+		return nil, app_error.NewInternalError(app_error.ErrCodeMysql, result.Error)
 	}
 	if result.RowsAffected != 1 {
-		return app_error.ErrUserNotExists
+		tx.Rollback()
+		return nil, app_error.ErrUserNotExists
 	}
-	return nil
+	user, err := gorm.G[model.User](tx).Where("id = ?", id).First(ctx)
+	if err != nil {
+		tx.Rollback()
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, app_error.ErrUserNotExists
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, app_error.ErrTimeout.WithError(err)
+		}
+		return nil, app_error.NewInternalError(app_error.ErrCodeMysql, err)
+	}
+	tx.Commit()
+	return &user, nil
 }
 
 // DeleteUser 删除用户（软删除）
